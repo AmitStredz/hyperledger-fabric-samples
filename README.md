@@ -1,3 +1,219 @@
+# **Hyperledger Fabric Network - Custom Implementation**
+
+## **1. Overview of the Changes**
+This project extends the original **Fabric Samples** repository by modifying the **test-network** to support enhanced functionalities. Below are the key enhancements:
+
+- Introduced **`application/`** and **`chaincode-node/`** folders:
+  - **`application/`**: A Node.js-based application that provides APIs to interact with the chaincode.
+  - **`chaincode-node/`**: Chaincode written in JavaScript (Node.js) to define ledger transactions.
+- Updated **`docker-compose-test-net.yaml`**:
+  - Increased the number of peers to **two per organization** for better network simulation.
+- **Network Setup & User Roles**:
+  - The network was created using **Certificate Authority (CA)**.
+  - Three user roles were introduced:
+    - **Admin**
+    - **Auditor**
+    - **Regular User**
+
+## **2. Attribute-Based Access Control (ABAC) Implementation**
+- **Objective:** Implemented ABAC to control access based on user attributes.
+- **Current Status:** Encountered minor permission-related issues, which are likely due to configuration details. This requires further refinement.
+
+## **3. How to Run the Application**
+Follow these steps to set up and test the modified network:
+
+### **Step 1: Set Up the Network**
+Run the following commands to start the network with the updated configuration:
+```sh
+cd test-network
+./network.sh up createChannel -ca
+```
+### **Step 2: Deploy the Chaincode**
+Follow the steps provided in the doc to pack and deploy the chaincode.
+
+[https://hyperledger-fabric.readthedocs.io/en/release-2.2/deploy_chaincode.html#package-the-smart-contract]
+
+### **Step 3:  Set Up the Fabric CA Client Configuration**
+Ensure the fabric-ca-client configuration is set correctly:
+
+```sh
+export FABRIC_CA_CLIENT_HOME=$(pwd)/organizations/peerOrganizations/org1.example.com/
+```
+### **Step 4:Enroll the CA Admin (Required Before Registering Users)**
+Run this enrollment command before registering identities:
+
+```sh
+fabric-ca-client enroll \
+  -u https://admin:adminpw@localhost:7054 \
+  --tls.certfiles $(pwd)/organizations/fabric-ca/org1/tls-cert.pem
+
+```
+### **Step 5:Register the Admin User**
+```sh
+fabric-ca-client register \
+  --id.name admin1 \
+  --id.secret admin1pw \
+  --id.type client \
+  --id.attrs 'role=admin:ecert' \
+  -u https://localhost:7054 \
+  --tls.certfiles $(pwd)/organizations/fabric-ca/org1/tls-cert.pem
+```
+### **Step 6:  Enroll the Admin**
+```sh
+fabric-ca-client enroll \
+  -u https://admin1:admin1pw@localhost:7054 \
+  --tls.certfiles $(pwd)/organizations/fabric-ca/org1/tls-cert.pem \
+  -M $(pwd)/organizations/peerOrganizations/org1.example.com/users/Admin1@org1.example.com/msp
+
+```
+### **Step 7: Verify Enrollment**
+```sh
+ls $(pwd)/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+```
+Now that the admin is enrolled, WE can proceed with creating the admin identity for Org1 by copying the necessary MSP files.
+### **Step 8: Move the Admin MSP to the Correct Location**
+```sh
+mkdir -p $(pwd)/organizations/peerOrganizations/org1.example.com/msp/admin1certs
+cp $(pwd)/organizations/peerOrganizations/org1.example.com/users/Admin1@org1.example.com/msp/signcerts/cert.pem \
+   $(pwd)/organizations/peerOrganizations/org1.example.com/msp/admin1certs/
+
+```
+### **Step 9:  Verify the Enrollment**
+```sh
+ls $(pwd)/organizations/peerOrganizations/org1.example.com/msp/admin1certs/
+```
+It should show cert.pem, confirming that the admin certificate is placed correctly.
+
+### **Step 10: Register the Auditor**
+```sh
+fabric-ca-client register \
+  --id.name auditor \
+  --id.secret auditorpw \
+  --id.type client \
+  --id.attrs 'role=auditor:ecert' \
+  -u https://localhost:7054 \
+  --tls.certfiles $(pwd)/organizations/fabric-ca/org1/tls-cert.pem
+
+```
+### **Step 11:  Enroll the Auditor**
+```sh
+fabric-ca-client enroll \
+  -u https://auditor:auditorpw@localhost:7054 \
+  --tls.certfiles $(pwd)/organizations/fabric-ca/org1/tls-cert.pem \
+  -M $(pwd)/organizations/peerOrganizations/org1.example.com/users/Auditor@org1.example.com/msp
+
+
+```
+### **Step 12: Register the RegUser1**
+```sh
+fabric-ca-client register \
+  --id.name reguser1 \
+  --id.secret reguser1pw \
+  --id.type client \
+  --id.attrs 'role=user:ecert' \
+  -u https://localhost:7054 \
+  --tls.certfiles $(pwd)/organizations/fabric-ca/org1/tls-cert.pem
+```
+### **Step 13: Enroll the RegUser1**
+```sh
+fabric-ca-client enroll \
+  -u https://reguser1:reguser1pw@localhost:7054 \
+  --tls.certfiles $(pwd)/organizations/fabric-ca/org1/tls-cert.pem \
+  -M $(pwd)/organizations/peerOrganizations/org1.example.com/users/Reguser1@org1.example.com/msp
+```
+
+### **Step 14: Move Auditor Certificate**
+```sh
+mkdir -p $(pwd)/organizations/peerOrganizations/org1.example.com/msp/auditorcerts
+cp $(pwd)/organizations/peerOrganizations/org1.example.com/users/Auditor@org1.example.com/msp/signcerts/cert.pem \
+   $(pwd)/organizations/peerOrganizations/org1.example.com/msp/auditorcerts/
+```
+### **Step 15:  Move Regular User Certificate**
+```sh
+mkdir -p $(pwd)/organizations/peerOrganizations/org1.example.com/msp/usercerts
+cp $(pwd)/organizations/peerOrganizations/org1.example.com/users/Reguser1@org1.example.com/msp/signcerts/cert.pem \
+   $(pwd)/organizations/peerOrganizations/org1.example.com/msp/usercerts/
+```
+### **Step 16: Verify Enrollment & Certificates**
+```sh
+ls $(pwd)/organizations/peerOrganizations/org1.example.com/msp/
+```
+You should see:
+admincerts auditorcerts usercerts
+
+### **Step 17: Get enrolled identity details**
+```sh
+fabric-ca-client identity list -u https://localhost:7054 \
+ --tls.certfiles ${PWD}/organizations/fabric-ca/org1/tls-cert.pem
+```
+### **Step 18:  Check Installed Chaincode (On a Peer)**
+```sh
+peer lifecycle chaincode queryinstalled --peerAddresses localhost:7051 --tlsRootCertFiles $CORE_PEER_TLS_ROOTCERT_FILE
+```
+### **Step 19: Check Committed Chaincode (On a Channel)**
+```sh
+peer lifecycle chaincode querycommitted --channelID mychannel
+
+```
+Now we are goog to go. The chaincode is deployed and the CA indentities are created.
+
+### **Step 20: Run the Application**
+
+From the test-network directory, follow the steps to run the nodeJs application and test the API:
+
+**Install dependencies**
+```sh
+cd applications/myapp
+npm Install
+```
+**Run the node file**
+```sh
+node index.js
+```
+### **Step 21: Testing**
+Using Postman or any REST client, test API requests for different user roles.
+
+Initialize the ledger
+```sh
+POST http://localhost:3000/initLedger
+```
+Retrieve all assets
+```sh
+GET http://localhost:3000/getAllAssets
+```
+Create an asset
+```sh
+POST http://localhost:3000/assets
+```
+Retrive an asset
+```sh
+GET http://localhost:3000/assets/:id
+```
+Update an asset
+```sh
+PUT http://localhost:3000/assets/:id
+```
+Delete an asset
+```sh
+DELETE http://localhost:3000/assets/:id
+```
+Transfers asset from one user to other
+```sh
+POST http://localhost:3000/transferAsset
+```
+**Payload Body Format**
+```sh
+{
+      "id": 1,
+      "color": "blue",
+      "size": "15",
+      "owner": "reguser1",
+      "value": "5",
+},
+
+```
+
+
 [//]: # (SPDX-License-Identifier: CC-BY-4.0)
 
 # Hyperledger Fabric Samples

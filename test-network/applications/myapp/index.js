@@ -94,7 +94,8 @@ app.get('/getAllAssets', async (req, res) => {
     }
 });
 
-app.post('/createAsset', async (req, res) => {
+// Creates an asset
+app.post('/assets', async (req, res) => {
     try {
         const { id, color, size, owner, value } = req.body;
         const contract = await getContract();
@@ -105,6 +106,44 @@ app.post('/createAsset', async (req, res) => {
     }
 });
 
+// Retrieves an asset
+app.get('/assets/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const contract = await getContract();
+        const resultBytes = await contract.evaluateTransaction('ReadAsset', id);
+        const result = JSON.parse(utf8Decoder.decode(resultBytes));
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Updates an asset
+app.put('/assets/:id', async (req, res) => {
+    try {
+        const { id, color, size, owner, value } = req.body;
+        const contract = await getContract();
+        await contract.submitTransaction('UpdateAsset', id, color, size, owner, value);
+        res.json({ message: `Asset ${id} updated successfully` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Deletes an asset
+app.delete('/assets/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const contract = await getContract();
+        await contract.submitTransaction('DeleteAsset', id);
+        res.json({ message: `Asset ${id} deleted successfully` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Transfers asset from one user to other
 app.post('/transferAsset', async (req, res) => {
     try {
         const { id, newOwner } = req.body;
@@ -122,30 +161,6 @@ app.post('/transferAsset', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-app.get('/readAsset/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const contract = await getContract();
-        const resultBytes = await contract.evaluateTransaction('ReadAsset', id);
-        const result = JSON.parse(utf8Decoder.decode(resultBytes));
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/updateAsset', async (req, res) => {
-    try {
-        const { id, color, size, owner, value } = req.body;
-        const contract = await getContract();
-        await contract.submitTransaction('UpdateAsset', id, color, size, owner, value);
-        res.json({ message: `Asset ${id} updated successfully` });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 
 // Start the server
 app.listen(port, () => {
